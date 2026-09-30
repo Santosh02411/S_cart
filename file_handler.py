@@ -58,6 +58,51 @@ def load_products() -> dict:
     return products
 
 
+def save_products(products: dict):
+    """
+    Write all products back to products.txt (overwrites existing file).
+
+    Args:
+        products (dict): {product_id: Product}
+    """
+    _ensure_data_dir()
+    try:
+        with open(PRODUCTS_FILE, "w", encoding="utf-8") as f:
+            f.write("# Shopping Cart — Product Catalog\n")
+            f.write("# Format: product_id|name|price|stock\n")
+            for product in products.values():
+                f.write(product.to_file_line() + "\n")
+    except IOError as e:
+        print(f"  [Error] Could not save products: {e}")
+
+
+# ── User File Operations ───────────────────────────────────────────────────────
+
+def load_users() -> dict:
+    """
+    Read user credentials from users.txt and return a dict of {username: {'password': pwd, 'role': role}}.
+
+    Returns:
+        dict: User dictionary. Default admin account is returned if file does not exist.
+    """
+    _ensure_data_dir()
+    users = {}
+    try:
+        with open(USERS_FILE, "r", encoding="utf-8") as f:
+            for line_num, line in enumerate(f, start=1):
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                parts = line.split("|")
+                if len(parts) == 3:
+                    username, pwd, role = parts
+                    users[username] = {'password': pwd, 'role': role}
+    except FileNotFoundError:
+        # Provide default fallback
+        users = {'admin': {'password': 'admin', 'role': 'admin'}}
+
+    return users
+
 def save_users(users: dict):
     """
     Write user dictionary back to users.txt.
@@ -196,3 +241,70 @@ def print_bill(order_items: list, grand_total: float,
 
 
 # ── CSV Export ───────────────────────────────────────────────────────────────
+
+import csv
+
+def save_order_csv(order_items: list, grand_total: float,
+                   address: str, payment_method: str, timestamp: str):
+    """
+    Append the order as new rows in orders.csv.
+    Writes the header row automatically if the file doesn't exist yet.
+
+    Columns:
+        Order Date, Customer Address, Payment Method,
+        S.No, Product, Qty, Unit Price (Rs.), Subtotal (Rs.), Grand Total (Rs.)
+    """
+    _ensure_data_dir()
+    file_exists = os.path.exists(ORDERS_CSV)
+
+    try:
+        with open(ORDERS_CSV, "a", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+
+            # Write header only on first run
+            if not file_exists:
+                writer.writerow([
+                    "Order Date", "Customer Address", "Payment Method",
+                    "S.No", "Product", "Qty",
+                    "Unit Price (Rs.)", "Subtotal (Rs.)", "Grand Total (Rs.)"
+                ])
+
+            for idx, item in enumerate(order_items, start=1):
+                writer.writerow([
+                    timestamp       if idx == 1 else "",
+                    address         if idx == 1 else "",
+                    payment_method  if idx == 1 else "",
+                    idx,
+                    item['name'],
+                    item['qty'],
+                    f"{item['price']:.2f}",
+                    f"{item['subtotal']:.2f}",
+                    f"{grand_total:.2f}" if idx == 1 else "",
+                ])
+
+        print(f"  ✔ Order saved to  → {ORDERS_CSV}")
+
+    except IOError as e:
+        print(f"  [Error] Could not save CSV: {e}")
+
+
+def load_orders_csv() -> list:
+    """
+    Read the orders from orders.csv and return it as a list of dicts.
+    Returns:
+        list of dicts containing row data mapped by header names.
+    """
+    if not os.path.exists(ORDERS_CSV):
+        return []
+    
+    rows = []
+    try:
+        with open(ORDERS_CSV, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                rows.append(row)
+    except IOError as e:
+        print(f"  [Error] Could not load orders CSV: {e}")
+        
+    return rows
+
